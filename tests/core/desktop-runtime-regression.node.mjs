@@ -16,9 +16,10 @@ test('main process fails loudly when the compiled preload is missing', () => {
   assert.match(factory, /preload-error/);
 });
 
-test('desktop overlay clears both root and body backgrounds so the transparent BrowserWindow stays transparent', () => {
+test('desktop overlay clears root and body backgrounds before React overlay markup exists', () => {
   assert.match(renderer, /import '\.\/overlay-transparency\.css'/);
-  assert.match(overlayStyles, /html:has\(\.overlay\)/);
-  assert.match(overlayStyles, /body:has\(\.overlay\)/);
+  assert.match(renderer, /dataset\.window/);
+  assert.match(overlayStyles, /html\[data-window=['\"]overlay['\"]\]/);
   assert.match(overlayStyles, /background:\s*transparent\s*!important/);
+  assert.doesNotMatch(overlayStyles, /:has\(/);
 });
