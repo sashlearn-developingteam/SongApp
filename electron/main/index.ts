@@ -56,7 +56,8 @@ function publishSpotifyState(state: SpotifyConnectionState): void {
 }
 
 function publishLyricsState(state: LyricsState): void {
-  publishToAll('lyrics:changed', state);
+  overlays.broadcastLyrics(state);
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('lyrics:changed', state);
 }
 
 function publishPlayback(track: CurrentTrack | null, forcedEvent?: PlaybackEvent | null): void {
