@@ -1,5 +1,5 @@
-html:has(.overlay),
-body:has(.overlay),
-#root:has(.overlay) {
+html[data-window='overlay'],
+html[data-window='overlay'] body,
+html[data-window='overlay'] #root {
   background: transparent !important;
 }
