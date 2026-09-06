@@ -1,0 +1,5 @@
+html:has(.overlay),
+body:has(.overlay),
+#root:has(.overlay) {
+  background: transparent !important;
+}
