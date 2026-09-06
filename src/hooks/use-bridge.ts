@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useAppStore } from '../stores/app-store';
+import { createBridgeHydrationGate } from './bridge-hydration';
 
 export function useBridge(): void {
   const setSettings = useAppStore((s) => s.setSettings);
@@ -12,6 +13,30 @@ export function useBridge(): void {
 
   useEffect(() => {
     let alive = true;
+    const gate = createBridgeHydrationGate();
+
+    const offSettings = window.songApp.settings.onChanged((settings) => {
+      gate.mark('settings');
+      setSettings(settings);
+    });
+    const offPlayback = window.songApp.playback.onChanged((track) => {
+      gate.mark('track');
+      setTrack(track);
+    });
+    const offPlaybackEvent = window.songApp.playback.onEvent((event) => {
+      gate.mark('playbackEvent');
+      setPlaybackEvent(event);
+    });
+    const offSpotify = window.songApp.spotify.onChanged((spotify) => {
+      gate.mark('spotify');
+      setSpotify(spotify);
+    });
+    const offLyrics = window.songApp.lyrics.onChanged((lyrics) => {
+      gate.mark('lyrics');
+      setLyrics(lyrics);
+    });
+
+    const hydrationSnapshot = gate.snapshot();
     void Promise.all([
       window.songApp.settings.get(),
       window.songApp.system.getDisplays(),
@@ -20,23 +45,18 @@ export function useBridge(): void {
       window.songApp.lyrics.getState()
     ]).then(([settings, displays, spotify, snapshot, lyrics]) => {
       if (!alive) return;
-      setSettings(settings);
+      if (gate.isFresh('settings', hydrationSnapshot)) setSettings(settings);
       setDisplays(displays);
-      setSpotify(spotify);
-      setTrack(snapshot.track);
-      setPlaybackEvent(snapshot.event);
-      setLyrics(lyrics);
+      if (gate.isFresh('spotify', hydrationSnapshot)) setSpotify(spotify);
+      if (gate.isFresh('track', hydrationSnapshot)) setTrack(snapshot.track);
+      if (gate.isFresh('playbackEvent', hydrationSnapshot)) setPlaybackEvent(snapshot.event);
+      if (gate.isFresh('lyrics', hydrationSnapshot)) setLyrics(lyrics);
       setHydrated(true);
     }).catch((error) => {
       console.error('[Song App] Bridge hydration failed', error);
       if (alive) setHydrated(true);
     });
 
-    const offSettings = window.songApp.settings.onChanged(setSettings);
-    const offPlayback = window.songApp.playback.onChanged(setTrack);
-    const offPlaybackEvent = window.songApp.playback.onEvent(setPlaybackEvent);
-    const offSpotify = window.songApp.spotify.onChanged(setSpotify);
-    const offLyrics = window.songApp.lyrics.onChanged(setLyrics);
     return () => {
       alive = false;
       offSettings();
