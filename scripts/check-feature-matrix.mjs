@@ -2,7 +2,9 @@ import { readFileSync } from 'node:fs';
 const read = (path) => readFileSync(path, 'utf8');
 const controls = read('src/features/settings/ControlCenter.tsx');
 const overlay = read('src/features/overlays/OverlayView.tsx');
-const ambient = read('src/features/overlays/AmbientCanvas.tsx');
+const ambient = read('src/features/overlays/ReactiveBackgroundCanvas.tsx');
+const lyricsProvider = read('electron/main/lyrics/lrclib-provider.ts');
+const lyricsManager = read('electron/main/lyrics/lyrics-manager.ts');
 const manager = read('electron/main/windows/overlay-manager.ts');
 const ipc = read('electron/main/ipc/handlers.ts');
 const main = read('electron/main/index.ts');
@@ -16,7 +18,8 @@ const checks = [
   ['always on top', /alwaysOnTop/.test(controls) && /setAlwaysOnTop/.test(manager)],
   ['start with Windows', /startWithWindows/.test(controls) && /setStartupEnabled/.test(ipc)],
   ['chaos reactions', /chaosEnabled/.test(controls) && /chaosFrequency/.test(overlay) && /playbackEvent/.test(overlay)],
-  ['lyrics layer', /lyricsEnabled/.test(controls) && /LyricsLayer/.test(overlay) && /canRenderLyrics/.test(overlay)],
+  ['lyrics layer', /lyricsEnabled/.test(controls) && /LyricsLayer/.test(overlay) && /canRenderLyrics/.test(overlay) && /LRCLIB/.test(controls) && /LrclibProvider/.test(main)],
+  ['lyrics caching', /LyricsCache/.test(lyricsManager) && /lyricsTrackKey/.test(lyricsManager)],
   ['reduced motion', /reducedMotion/.test(controls) && /reducedMotion/.test(ambient)],
   ['animation intensity', /animationIntensity/.test(controls) && /animationIntensity/.test(overlay)],
   ['30\/60 FPS target', /fpsTarget/.test(controls) && /fpsTarget/.test(ambient)],

@@ -1,11 +1,17 @@
 {
   "name": "song-app",
-  "version": "1.1.1",
+  "version": "1.2.3",
   "private": true,
   "description": "A Windows-first Spotify desktop music companion.",
   "main": "./out/main/index.js",
   "scripts": {
+    "setup:electron": "node scripts/ensure-electron.mjs",
+    "setup:spotify-brand": "node scripts/fetch-spotify-brand.mjs",
+    "setup:runtime": "npm run setup:electron && npm run setup:spotify-brand",
+    "postinstall": "npm run setup:electron",
+    "predev": "npm run setup:runtime",
     "dev": "electron-vite dev",
+    "prebuild": "npm run setup:spotify-brand",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "test": "vitest run",
@@ -14,7 +20,7 @@
     "audit": "npm run test && npm run typecheck && node scripts/audit.mjs",
     "check:release": "node scripts/check-release.mjs",
     "package:win": "npm run build && npm run check:release && electron-builder --win nsis portable",
-    "test:integration": "node --test tests/core/*.node.mjs",
+    "test:integration": "node --experimental-strip-types --test tests/core/*.node.mjs",
     "verify": "npm run test && npm run typecheck && npm run test:integration && npm run build && node scripts/audit.mjs",
     "check:features": "node scripts/check-feature-matrix.mjs",
     "verify:windows": "powershell -ExecutionPolicy Bypass -File .\\scripts\\verify-windows.ps1"
@@ -71,6 +77,7 @@
   },
   "allowScripts": {
     "esbuild": true,
-    "electron-winstaller": true
+    "electron-winstaller": true,
+    "electron": true
   }
 }

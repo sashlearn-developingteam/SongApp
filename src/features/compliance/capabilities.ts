@@ -17,9 +17,9 @@ export function capabilitiesFor(track: CurrentTrack | null, rights?: LyricsRight
     canDisplayArtwork: Boolean(track?.albumImage),
     canTransformArtwork: !spotify,
     canDisplayLyrics: Boolean(rights?.canDisplay),
-    canSynchronizeLyrics: false,
+    canSynchronizeLyrics: Boolean(rights?.canSynchronize) && Boolean(track) && !spotify,
     canCacheLyrics: Boolean(rights?.canCache),
-    canSynchronizeVisualsToPlayback: false
+    canSynchronizeVisualsToPlayback: Boolean(track) && !spotify
   };
 }
 

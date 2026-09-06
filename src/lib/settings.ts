@@ -10,7 +10,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   alwaysOnTop: false,
   startWithWindows: false,
   reducedMotion: false,
-  animationIntensity: 0.7,
+  animationIntensity: 0.9,
   fpsTarget: 60,
   particleAmount: 0.45,
   chaosEnabled: false,

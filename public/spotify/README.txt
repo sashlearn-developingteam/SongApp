@@ -1,6 +1,11 @@
-Spotify brand assets are intentionally NOT bundled in this repository.
-Before enabling live Spotify or creating a distributable release, download the official Spotify full-logo package from Spotify's Developer Design Guidelines and copy the UNMODIFIED files here as:
+Spotify attribution assets in this directory must remain official and unmodified.
 
+Song App downloads the required full-logo PNGs directly from Spotify's official Press Center before development and production builds:
+
+https://storage.googleapis.com/pr-newsroom-wp/1/2023/05/Spotify_Full_Logo_RGB_Green.png
+https://storage.googleapis.com/pr-newsroom-wp/1/2023/05/Spotify_Full_Logo_RGB_White.png
+
+Installed filenames:
 Spotify_Full_Logo_RGB_Green.png
 Spotify_Full_Logo_RGB_White.png
 

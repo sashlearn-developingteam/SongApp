@@ -5,9 +5,10 @@
 ```text
 Electron main process
   ├─ Spotify OAuth/API + encrypted tokens
-  ├─ playback poller and event detector
+  ├─ centralized playback poller + semantic event detector
+  ├─ LRCLIB LyricsManager + cache + provider clients
   ├─ tray, startup, power/session events
-  ├─ monitor enumeration and overlay windows
+  ├─ monitor enumeration + overlay windows
   └─ validated IPC handlers
            │
            ▼
@@ -15,39 +16,55 @@ Electron main process
            │
            ▼
 React renderer windows
-  ├─ main control center / onboarding
+  ├─ control center / onboarding
   └─ one transparent overlay per enabled display
+       ├─ metadata composition
+       ├─ rights-gated lyrics layer
+       └─ single Canvas2D reactive background controller
 ```
 
 ## Security boundary
 
-Only the Electron main process receives native privileges. Renderer windows use `nodeIntegration: false`, `contextIsolation: true`, `sandbox: true`, and `webSecurity: true`. Permission requests are denied by default. Preload exposes an allowlisted typed bridge rather than raw `ipcRenderer` or Electron objects.
-
-Every privileged IPC invoke validates the sender URL and parses inputs with schemas. Navigation/new-window requests are denied and, for exact allowlisted Spotify HTTPS hosts, redirected through the system browser.
+Only Electron main receives native/provider privileges. Renderer windows use `nodeIntegration: false`, `contextIsolation: true`, `sandbox: true`, and `webSecurity: true`. Preload exposes a narrow allowlisted API; raw `ipcRenderer`, tokens, Node APIs, and raw provider responses are never exposed.
 
 ## Playback flow
 
 ```text
-Spotify Web API → strict normalizer → PlaybackState
-                                ├→ playback store broadcast
-                                └→ semantic event detector
-                                      └→ experience/reaction engine
+Spotify Web API -> strict normalizer -> CurrentTrack
+                                  ├-> renderer playback snapshot/event broadcast
+                                  ├-> semantic playback events
+                                  └-> LyricsManager track identity update
 ```
 
-The overlay never consumes raw Spotify responses. Track progress does not drive visual animation.
+Playback-position updates do not cause lyric network requests. Spotify playback position is also not permitted to drive visual synchronization.
+
+## Lyrics flow
+
+```text
+CurrentTrack
+  -> stable provider-scoped metadata key
+  -> LyricsManager
+       ├-> in-memory hit / short miss cache
+       ├-> SimulatorLyricsProvider for app-owned demo tracks
+       └-> LrclibProvider for normal tracks
+            ├-> /api/get exact lookup
+            └-> conservative /api/search fallback
+  -> normalized LyricsState
+  -> IPC/preload bridge
+  -> rights/policy capability gate
+  -> lyrics overlay
+```
+
+LRC parsing happens once at provider normalization time. Active-line lookup is binary search. The renderer schedules work around the next timed line rather than scanning all lines every frame. Spotify tracks intentionally keep timed highlighting disabled because Spotify policy forbids audiovisual synchronization.
+
+## Reactive background
+
+The overlay uses one Canvas2D animation controller rather than React state at 60 FPS. React supplies configuration and discrete state changes through refs. The canvas combines a deterministic seeded palette, large gradient field, atmospheric radial forms, parallax ribbon, depth particles, lyric-safe luminance shield, and vignette.
+
+The engine derives a compact smoothed visual state from allowed signals. Simulator tracks can use progress, lyric cadence, active-line impulses, and upcoming-line anticipation. Spotify tracks receive only non-timeline discrete state and deterministic track identity.
+
+Rendering is throttled/paused when hidden, settles while paused, caps device pixel ratio, adapts particle budget/quality, and removes RAF/listeners on cleanup. Reduced motion preserves atmosphere at lower cadence and greatly reduces particles/parallax/pulses.
 
 ## Settings flow
 
-Preferences are validated, atomically written, and broadcast to all renderer windows after changes. Main-window changes therefore update existing overlay windows without reload. Tray actions and monitor reconciliation also synchronize the same settings state.
-
-Display profiles store per-monitor enable/mode/theme information. Global mode/theme choices update current profiles, while newly discovered monitors inherit the current global defaults.
-
-## Rendering lifecycle
-
-Overlay windows are created only for enabled, available displays. Disabled display overlays are destroyed. Hiding overlays pauses optional ambient motion through synchronized settings and hides the native windows. Power suspend/lock events pause polling and animation; resume/unlock restore the prior animation pause state.
-
-No WebGL context is created in the MVP. Ambient effects use bounded CSS geometry/particles and paused animation states.
-
-## Lyrics
-
-`LyricsProvider` is an abstraction. Rights are represented independently from lyric lines and checked through centralized capability functions before rendering. The bundled provider uses only development-owned text.
+Validated preferences are stored in main, applied to native windows, and broadcast to all renderers. Main-window changes update existing overlays without reload. Per-monitor mode/layout settings stay independent.

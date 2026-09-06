@@ -1,21 +1,29 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Minus, RotateCcw, Plus, Check } from 'lucide-react';
+import { Check, Minus, Plus, RotateCcw } from 'lucide-react';
 import { useAppStore } from '../../stores/app-store';
 import { AlbumArtwork } from '../../components/AlbumArtwork';
 import { SpotifyAttribution } from '../../components/SpotifyAttribution';
 import { capabilitiesFor, canRenderLyrics } from '../compliance/capabilities';
 import { reactionFor, shouldShowReaction } from '../reactions/reaction-engine';
-import { demoLyricsForTrack } from '../lyrics/demo-provider';
-import { AmbientCanvas } from './AmbientCanvas';
+import { useSyncedLyrics } from '../lyrics/use-synced-lyrics';
+import { ReactiveBackgroundCanvas } from './ReactiveBackgroundCanvas';
 import { DEFAULT_OVERLAY_LAYOUT, normalizeOverlayLayout, updateMonitorPreference } from '../../lib/settings';
-import type { CurrentTrack, OverlayLayout } from '../../types/core';
+import type { CurrentTrack, LyricsState, OverlayLayout } from '../../types/core';
+
+const MODE_BACKGROUND_STRENGTH = {
+  minimal: 0.42,
+  typography: 0.56,
+  chaos: 0.8,
+  ambience: 1
+} as const;
 
 export function OverlayView() {
   const settings = useAppStore((s) => s.settings);
   const track = useAppStore((s) => s.track);
   const playbackEvent = useAppStore((s) => s.playbackEvent);
+  const lyricsState = useAppStore((s) => s.lyrics);
   const [editMode, setEditMode] = useState(false);
   const [reactionVisible, setReactionVisible] = useState(false);
   const displayId = useMemo(() => new URLSearchParams(window.location.search).get('display') ?? '', []);
@@ -36,7 +44,19 @@ export function OverlayView() {
     if (!dragRef.current) setDraftLayout(savedLayout);
   }, [savedLayout.x, savedLayout.y, savedLayout.scale]);
 
-  const capabilities = capabilitiesFor(track);
+  const capabilities = capabilitiesFor(track, lyricsState.result?.rights);
+  const allowLyricSynchronization = Boolean(
+    lyricsState.result?.kind === 'synced' && capabilities.canSynchronizeLyrics
+  );
+  const { activeIndex: activeLyricIndex, cadence: lyricCadence } = useSyncedLyrics(
+    track,
+    lyricsState.result,
+    allowLyricSynchronization
+  );
+  const nextLyricStartMs = allowLyricSynchronization && lyricsState.result?.kind === 'synced'
+    ? lyricsState.result.lines[activeLyricIndex + 1]?.startMs ?? lyricsState.result.lines[0]?.startMs
+    : undefined;
+
   const reaction = useMemo(() => {
     if (!settings.chaosEnabled || !shouldShowReaction(playbackEvent, settings.chaosFrequency) || !playbackEvent) return null;
     return reactionFor(playbackEvent, settings.chaosLevel);
@@ -52,8 +72,8 @@ export function OverlayView() {
     return () => window.clearTimeout(timeout);
   }, [playbackEvent?.type, reaction, settings.chaosFrequency]);
 
-  const lyrics = demoLyricsForTrack(track);
-  const showLyrics = settings.lyricsEnabled && canRenderLyrics(lyrics?.rights, true);
+  const showLyricsResult = settings.lyricsEnabled && canRenderLyrics(lyricsState.result?.rights, true);
+  const showLyricsPanel = settings.lyricsEnabled && (showLyricsResult || lyricsState.status !== 'idle');
   const motionEnabled = !settings.reducedMotion;
   const travel = motionEnabled ? Math.round(6 + settings.animationIntensity * 22) : 0;
   const transitionDuration = motionEnabled ? 0.16 + settings.animationIntensity * 0.36 : 0.08;
@@ -113,17 +133,24 @@ export function OverlayView() {
       data-reduced-motion={settings.reducedMotion || undefined}
       style={{ '--motion-intensity': settings.animationIntensity } as CSSProperties}
     >
-      <div className="overlay-theme-field" aria-hidden="true" />
-      {mode === 'ambience' && track ? (
-        <AmbientCanvas
-          active={Boolean(track?.playing)}
+      {track ? (
+        <ReactiveBackgroundCanvas
+          track={track}
+          playbackEvent={playbackEvent}
+          activeLyricIndex={activeLyricIndex}
+          lyricCadence={lyricCadence}
+          nextLyricStartMs={nextLyricStartMs}
+          lyricsVisible={showLyricsPanel}
           amount={settings.particleAmount}
           intensity={settings.animationIntensity}
           fpsTarget={settings.fpsTarget}
           reducedMotion={settings.reducedMotion}
           themeKey={settings.visualTheme}
+          allowSynchronizedSignals={capabilities.canSynchronizeVisualsToPlayback}
+          modeStrength={MODE_BACKGROUND_STRENGTH[mode]}
         />
       ) : null}
+      <div className="overlay-theme-field" aria-hidden="true" />
 
       <div
         className="overlay-layout"
@@ -161,7 +188,13 @@ export function OverlayView() {
         </AnimatePresence>
       ) : null}
 
-      {showLyrics && lyrics ? <LyricsLayer lyrics={lyrics} /> : null}
+      {showLyricsPanel ? (
+        <LyricsLayer
+          state={lyricsState}
+          activeIndex={activeLyricIndex}
+          synchronized={allowLyricSynchronization}
+        />
+      ) : null}
 
       {editMode ? (
         <div className="edit-toolbar" role="toolbar" aria-label="Overlay layout editor">
@@ -212,12 +245,57 @@ function ReactionToast({ text, reducedMotion }: { text: string; reducedMotion: b
   );
 }
 
-function LyricsLayer({ lyrics }: { lyrics: NonNullable<ReturnType<typeof demoLyricsForTrack>> }) {
+function LyricsLayer({ state, activeIndex, synchronized }: { state: LyricsState; activeIndex: number; synchronized: boolean }) {
+  const result = state.result;
+  if (!result) {
+    const label = state.status === 'loading' ? 'LRCLIB · LOADING'
+      : state.status === 'rate-limited' ? 'LRCLIB · RATE LIMITED'
+      : state.status === 'offline' ? 'LRCLIB · OFFLINE'
+      : state.status === 'error' ? 'LRCLIB · ERROR'
+      : state.status === 'not-found' ? 'LYRICS UNAVAILABLE'
+      : 'LYRICS';
+    return (
+      <aside className="lyrics-layer lyrics-state" aria-label="Lyrics status">
+        <p className="lyrics-label">{label}</p>
+        <p className="lyrics-message">{state.message ?? 'Waiting for lyrics.'}</p>
+      </aside>
+    );
+  }
+
+  const providerLabel = result.provider === 'simulator' ? 'Song App Simulator' : 'LRCLIB';
+
+  if (result.kind === 'instrumental') {
+    return (
+      <aside className="lyrics-layer lyrics-state" aria-label="Instrumental track">
+        <p className="lyrics-label">{providerLabel} · INSTRUMENTAL</p>
+        <p className="lyrics-message">Instrumental track</p>
+        <small>{result.attribution}</small>
+      </aside>
+    );
+  }
+
+  if (result.kind === 'plain') {
+    return (
+      <aside className="lyrics-layer" aria-label="Plain lyrics">
+        <p className="lyrics-label">{providerLabel} · PLAIN LYRICS</p>
+        <div className="lyrics-plain">{result.text}</div>
+        <small>{result.attribution}</small>
+      </aside>
+    );
+  }
+
+  const start = synchronized && activeIndex >= 0 ? Math.max(0, activeIndex - 1) : 0;
+  const visibleLines = result.lines.slice(start, start + (synchronized ? 4 : 7));
   return (
-    <aside className="lyrics-layer" aria-label="Demo lyrics">
-      <p className="lyrics-label">DEMO LYRICS · UNSYNCED</p>
-      <div>{lyrics.lines.map((line, index) => <p key={`${line.text}-${index}`}>{line.text}</p>)}</div>
-      {lyrics.rights.attribution ? <small>{lyrics.rights.attribution}</small> : null}
+    <aside className="lyrics-layer" aria-label="Synced lyrics">
+      <p className="lyrics-label">{synchronized ? `${providerLabel} · SYNCED LYRICS` : `${providerLabel} · SYNCED SOURCE · STATIC DISPLAY`}</p>
+      <div className="lyrics-synced">
+        {visibleLines.map((line, index) => {
+          const absoluteIndex = start + index;
+          return <p className={synchronized && absoluteIndex === activeIndex ? 'active' : ''} key={`${line.startMs}-${absoluteIndex}`}>{line.text || ' '}</p>;
+        })}
+      </div>
+      {!synchronized && result.provider === 'lrclib' ? <small>Playback-timed highlighting is disabled for Spotify content. {result.attribution}</small> : <small>{result.attribution}</small>}
     </aside>
   );
 }

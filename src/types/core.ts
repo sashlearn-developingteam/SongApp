@@ -47,8 +47,33 @@ export type LyricsRights = {
   commercialUse: boolean;
 };
 
+export type LyricsProviderId = 'lrclib' | 'simulator';
 export type LyricLine = { text: string; startMs?: number; endMs?: number };
-export type LyricsResult = { provider: string; lines: LyricLine[]; rights: LyricsRights };
+export type TimedLyricLine = { text: string; startMs: number; endMs?: number };
+export type LyricsResult =
+  | { kind: 'synced'; provider: LyricsProviderId; lines: TimedLyricLine[]; rights: LyricsRights; attribution?: string }
+  | { kind: 'plain'; provider: LyricsProviderId; text: string; rights: LyricsRights; attribution?: string }
+  | { kind: 'instrumental'; provider: LyricsProviderId; rights: LyricsRights; attribution?: string };
+
+export type LyricsStatus =
+  | 'idle'
+  | 'loading'
+  | 'synced'
+  | 'plain'
+  | 'instrumental'
+  | 'not-found'
+  | 'offline'
+  | 'rate-limited'
+  | 'error';
+
+export type LyricsState = {
+  status: LyricsStatus;
+  provider: LyricsProviderId | null;
+  trackKey: string | null;
+  result: LyricsResult | null;
+  message?: string;
+  retryAfterMs?: number;
+};
 
 export type OverlayLayout = {
   x: number;

@@ -19,8 +19,8 @@ const checks = [
   ['Theming', 'visual theme tokens', () => readFileSync('src/features/themes/themes.ts','utf8').includes('VISUAL_THEMES')],
   ['Integrity', 'sandboxed renderer', () => readFileSync('electron/main/security/navigation-policy.ts','utf8').includes('sandbox: true')],
   ['Integrity', 'context isolation', () => readFileSync('electron/main/security/navigation-policy.ts','utf8').includes('contextIsolation: true')],
-  ['Integrity', 'lyrics fail closed', () => readFileSync('src/features/compliance/capabilities.ts','utf8').includes('canSynchronizeLyrics: false')],
-  ['Integrity', 'no Spotify AV synchronization', () => readFileSync('src/features/compliance/capabilities.ts','utf8').includes('canSynchronizeVisualsToPlayback: false')]
+  ['Integrity', 'lyrics fail closed', () => /canSynchronizeLyrics:[^\n]*!spotify/.test(readFileSync('src/features/compliance/capabilities.ts','utf8'))],
+  ['Integrity', 'no Spotify AV synchronization', () => /canSynchronizeVisualsToPlayback:[^\n]*!spotify/.test(readFileSync('src/features/compliance/capabilities.ts','utf8'))]
 ];
 let score = 0;
 for (const [group, name, fn] of checks) {

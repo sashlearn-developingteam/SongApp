@@ -71,9 +71,9 @@ Themes are token presets, not separate component trees. Production presets: Edit
 
 - Prefer opacity and transforms.
 - No permanent WebGL context.
-- Continuous ambient animation runs only while the overlay is visible, the system is not paused/locked, the experience requests ambience, and idle policy allows it.
-- 30/60 cadence settings affect real CSS animation step cadence.
-- OS `prefers-reduced-motion` and the in-app Reduced Motion setting both replace spatial motion with restrained fades and pause ambient loops.
+- One Canvas2D controller supplies atmospheric motion across modes; it pauses while hidden/locked, throttles while paused, and adapts quality when drawing becomes expensive.
+- 30/60 cadence settings affect the real Canvas2D frame scheduler; high-frequency animation stays outside React reconciliation.
+- OS `prefers-reduced-motion` and the in-app Reduced Motion setting preserve atmosphere but lower cadence, particle count, parallax, and pulse strength.
 - Useful feedback is not globally reduced to 0.01ms.
 
 ## States

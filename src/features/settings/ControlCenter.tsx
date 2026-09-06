@@ -20,6 +20,7 @@ import type {
   CurrentTrack,
   DesktopMode,
   DisplayInfo,
+  LyricsState,
   SimulatorScenario,
   SpotifyConnectionState,
   ThemeId
@@ -50,6 +51,7 @@ export function ControlCenter() {
   const track = useAppStore((s) => s.track);
   const spotify = useAppStore((s) => s.spotify);
   const displays = useAppStore((s) => s.displays);
+  const lyrics = useAppStore((s) => s.lyrics);
   const setSpotify = useAppStore((s) => s.setSpotify);
   const update: UpdateSettings = (patch) => window.songApp.settings.update(patch);
 
@@ -84,7 +86,7 @@ export function ControlCenter() {
         {section === 'appearance' ? <Appearance settings={settings} update={update}/> : null}
         {section === 'desktop' ? <Desktop settings={settings} update={update} displays={displays}/> : null}
         {section === 'funny' ? <Funny settings={settings} update={update}/> : null}
-        {section === 'lyrics' ? <Lyrics track={track} settings={settings} update={update}/> : null}
+        {section === 'lyrics' ? <Lyrics track={track} state={lyrics} settings={settings} update={update}/> : null}
         {section === 'performance' ? <Performance settings={settings} update={update}/> : null}
         {section === 'privacy' ? <Privacy/> : null}
         {section === 'developer' ? <Developer/> : null}
@@ -277,14 +279,30 @@ function Funny({ settings, update }: { settings: AppSettings; update: UpdateSett
   );
 }
 
-function Lyrics({ track, settings, update }: { track: CurrentTrack | null; settings: AppSettings; update: UpdateSettings }) {
-  const demoAvailable = track?.source === 'simulator';
+function Lyrics({ track, state, settings, update }: { track: CurrentTrack | null; state: LyricsState; settings: AppSettings; update: UpdateSettings }) {
+  const simulator = state.provider === 'simulator';
+  const status = simulator && state.status === 'synced' ? ['Simulator lyrics ready', 'App-owned synchronized demo text is available for full timing and visual-reactivity testing.']
+    : simulator && state.status === 'plain' ? ['Simulator lyrics ready', 'App-owned plain demo text is available.']
+    : state.status === 'loading' ? ['Contacting LRCLIB', 'Looking up this track from the LRCLIB community service.']
+    : state.status === 'synced' ? ['LRCLIB connected · synced lyrics available', track?.source === 'spotify' ? 'Synced timestamps are available, but playback-timed highlighting stays disabled for Spotify content.' : 'Timed lines are available for this source.']
+    : state.status === 'plain' ? ['LRCLIB connected · plain lyrics available', 'Plain lyrics are available for this track.']
+    : state.status === 'instrumental' ? ['Instrumental track', simulator ? 'The simulator marks this demo as instrumental.' : 'LRCLIB marks this track as instrumental.']
+    : state.status === 'not-found' ? ['Lyrics unavailable', 'LRCLIB did not return a conservative metadata match for this track.']
+    : state.status === 'offline' ? ['Unable to reach LRCLIB', state.message ?? 'Check your connection and try again.']
+    : state.status === 'rate-limited' ? ['LRCLIB rate limited', state.retryAfterMs ? `Song App will respect the provider cooldown for about ${Math.ceil(state.retryAfterMs / 1000)} seconds.` : 'Song App is backing off before another request.']
+    : state.status === 'error' ? ['LRCLIB provider error', state.message ?? 'The provider returned an unexpected response.']
+    : ['LRCLIB ready', settings.lyricsEnabled ? 'Waiting for a track before requesting lyrics.' : 'Enable the lyrics layer to query LRCLIB for the current track.'];
+
   return (
     <>
-      <Header eyebrow="LYRICS" title="Rights first, rendering second." copy="This build ships only original demo text. Real Spotify tracks stay lyric-free until a licensed provider explicitly grants display rights."/>
+      <Header eyebrow="LYRICS" title="LRCLIB, behind the same rights gate." copy="Lyrics requests stay in the Electron main process. LRCLIB is a community source, requires no API key, and Song App does not claim that it grants commercial lyric-display rights."/>
       <section className="settings-group">
-        <Toggle label="Enable lyrics layer" description="The layer renders only when the active provider grants display rights." checked={settings.lyricsEnabled} onChange={(value) => void update({lyricsEnabled:value})}/>
-        <div className="rights-box"><ShieldCheck size={20}/><div><strong>{demoAvailable ? 'Demo provider ready' : 'No licensed live provider configured'}</strong><p>{demoAvailable ? 'Display allowed · synchronization disabled · caching allowed · original text only' : 'Use the developer simulator to preview the layer. Spotify metadata never unlocks lyrics by itself.'}</p></div></div>
+        <Toggle label="Enable lyrics layer" description="Fetch on track change, cache lightweight results, and render only normalized provider data." checked={settings.lyricsEnabled} onChange={(value) => void update({lyricsEnabled:value})}/>
+        <div className="rights-box"><ShieldCheck size={20}/><div><strong>{status[0]}</strong><p>{status[1]}</p></div></div>
+        <div className="connection-row">
+          <div><strong>Lyrics provider</strong><small>{simulator ? 'Song App Simulator · app-owned test lyrics' : 'LRCLIB · community lyrics source · no scraping · no LRCLIB environment variables.'}</small></div>
+          <button className="secondary" disabled={!settings.lyricsEnabled || !track || state.status === 'loading'} onClick={() => void window.songApp.lyrics.refresh()}>Refresh lyrics</button>
+        </div>
       </section>
     </>
   );
@@ -295,8 +313,8 @@ function Performance({ settings, update }: { settings: AppSettings; update: Upda
     <>
       <Header eyebrow="PERFORMANCE" title="Built to stay open all day." copy="The ambience renderer now obeys the frame target, particle amount, motion intensity, and reduced-motion setting directly."/>
       <section className="settings-group">
-        <Toggle label="Reduced motion" description="Use short opacity transitions and stop continuous ambient drift." checked={settings.reducedMotion} onChange={(value) => void update({reducedMotion:value})}/>
-        <Range label="Animation intensity" value={settings.animationIntensity} onChange={(value) => void update({animationIntensity:value})}/>
+        <Toggle label="Reduced motion" description="Preserve the atmosphere while greatly reducing parallax, pulses, particles, and frame rate." checked={settings.reducedMotion} onChange={(value) => void update({reducedMotion:value})}/>
+        <Range label="Background intensity" value={settings.animationIntensity} onChange={(value) => void update({animationIntensity:value})}/>
         <Range label="Particle amount" value={settings.particleAmount} onChange={(value) => void update({particleAmount:value})}/>
         <label className="select-row"><span><strong>Animation target</strong><small>30 FPS reduces ambient work; 60 FPS favors smoothness.</small></span><select value={settings.fpsTarget} onChange={(event) => void update({fpsTarget:Number(event.target.value) as 30|60})}><option value="30">30 FPS</option><option value="60">60 FPS</option></select></label>
       </section>
@@ -309,7 +327,7 @@ function Privacy() {
     <>
       <Header eyebrow="PRIVACY" title="The quiet kind of software." copy="No listening-history database by default. No audio capture. No Spotify data used for model training."/>
       <section className="privacy-list">
-        <article><Eye size={20}/><div><strong>Accessed</strong><p>Current track metadata, album artwork URL, playback state, and the minimum Spotify identity needed for authorization.</p></div></article>
+        <article><Eye size={20}/><div><strong>Accessed</strong><p>Current track metadata, album artwork URL, playback state, and the minimum Spotify identity needed for authorization. When lyrics are enabled, title, primary artist, album, and duration are sent to LRCLIB for lookup.</p></div></article>
         <article><ShieldCheck size={20}/><div><strong>Stored locally</strong><p>Encrypted Spotify tokens and your preferences. Demo simulator data is ephemeral.</p></div></article>
         <article><Sparkles size={20}/><div><strong>Never used for training</strong><p>Spotify metadata, artwork, lyrics, and listening state are never collected into an AI training dataset.</p></div></article>
       </section>

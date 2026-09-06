@@ -1,76 +1,62 @@
 # Compliance Notes
 
-Last reviewed: **2026-09-04**. This document is an engineering guardrail, not legal advice. Re-review the official provider terms before every public release.
-
-## Authoritative Spotify references
-
-- Design & Branding Guidelines: https://developer.spotify.com/documentation/design
-- Developer Policy: https://developer.spotify.com/policy
-- Developer Terms: https://developer.spotify.com/terms
-- February 2026 Web API migration guidance: https://developer.spotify.com/documentation/web-api/tutorials/february-2026-migration-guide
+Last reviewed: **2026-09-06**. This is an engineering guardrail, not legal advice. Re-review provider terms before public release.
 
 ## Spotify integration boundary
 
-Song App uses Spotify as the playback-state provider. Spotify remains the actual music player. The application does **not** stream, download, proxy, record, cache, or reproduce Spotify audio.
+Song App uses Spotify only as a playback-state and metadata provider. Spotify remains the music player. Song App does not stream, download, proxy, record, cache, or reproduce Spotify audio. Authentication uses Authorization Code with PKCE. Tokens remain in Electron main-process storage backed by `safeStorage` and are never exposed to the renderer.
 
-Requested MVP scope: `user-read-currently-playing` only.
+## No Spotify audiovisual synchronization
 
-Authentication uses Authorization Code with PKCE and a loopback callback bound to `127.0.0.1`. No Spotify client secret is shipped to the renderer or repository. Tokens are stored through Electron `safeStorage` and are never exposed through preload IPC.
+Spotify's current Developer Policy prohibits synchronizing Spotify sound recordings with visual media. Song App therefore keeps `canSynchronizeLyrics` and `canSynchronizeVisualsToPlayback` **false for Spotify-sourced tracks**, even when LRCLIB supplies timestamps.
 
-## No audiovisual synchronization
+For Spotify tracks, the background may react to discrete application state such as a track changing or playback pausing/resuming, but it does not use playback position, lyric timestamps, beat timing, waveform data, or captured audio to drive a synchronized visual timeline. Full timing-reactive behavior is available only for the app-owned developer simulator or another future source whose platform policy permits it.
 
-This release intentionally does not synchronize Spotify sound recordings with visual media. There is no beat detection, waveform extraction, audio capture, progress-timeline animation, or playback-position-driven visual sequence.
+Official references:
 
-Visual changes may react to discrete application state such as a track changing, pause/resume, or a rapid-skip event. Once selected, ambient motion is app-owned and runs independently from the recording timeline.
+- https://developer.spotify.com/policy
+- https://developer.spotify.com/documentation/web-api/reference/get-information-about-the-users-current-playback
 
-## Artwork
+## LRCLIB lyrics provider
 
-When Spotify artwork is displayed:
+Spotify is not treated as a lyrics source. Song App does not scrape Spotify, Genius, Musixmatch, Google, search-result pages, or lyric websites. Lyrics are requested from LRCLIB's documented API through the Electron main process.
 
-- use only the URL provided by Spotify;
-- preserve the original image and aspect ratio;
-- do not crop, distort, recolor, blur, animate, or overlay text/controls;
-- use only permitted corner rounding;
-- do not use artwork as a wallpaper/background transformation;
-- omit artwork entirely when a layout cannot satisfy these constraints.
+Flow:
 
-`SpotifyArtwork` is the centralized rendering component. Capability checks fail closed when artwork permission is unknown.
+```text
+CurrentTrack -> LyricsManager -> LrclibProvider -> normalized LyricsState -> preload bridge -> renderer
+```
 
-## Metadata, attribution, and links
+- exact lookup uses `/api/get` with title, primary artist, optional album, and rounded duration;
+- a conservative `/api/search` fallback is used only when the exact result is missing or does not match;
+- candidate title, artist, album, and duration are validated before display;
+- synchronized LRC is parsed once after download;
+- successful, instrumental, and short-lived not-found results use a lightweight in-memory cache;
+- playback-position updates never trigger LRCLIB requests;
+- 429/503 responses honor `Retry-After` when present and otherwise use bounded exponential backoff;
+- provider failures resolve to finite UI states and never crash the renderer/main process;
+- lyrics lookup is disabled when the user turns the lyrics layer off.
 
-Spotify-sourced tracks are explicitly marked `source: 'spotify'`. Simulator tracks are explicitly `source: 'simulator'` and carry no fake Spotify URL.
+LRCLIB is presented factually as a community lyrics source. Song App does **not** claim that LRCLIB grants commercial lyric-display, publishing, territory, or synchronization rights. `commercialUse` therefore remains false for LRCLIB results. Availability through the API is not treated as legal clearance.
 
-Every Spotify playing view must include Spotify attribution and a link back to the Spotify service. Song App never draws or recreates the Spotify logo. Live Spotify connection is disabled unless both official full-logo assets are present:
+## Artwork and attribution
 
-- `resources/public/spotify-full-logo-white.svg`
-- `resources/public/spotify-full-logo-black.svg`
+Spotify artwork is rendered only from the URL Spotify provides and is not cropped, distorted, recolored, blurred, animated, or used as wallpaper. Spotify playing views retain official attribution and link-back behavior.
 
-The release checker fails while either file is absent. The files must be obtained directly from Spotify's official design-resource package and must remain unmodified.
-
-## Lyrics
-
-Spotify is not treated as a lyrics source. The application does not scrape Spotify, Genius, Musixmatch, Google, search-result pages, or lyric websites.
-
-The lyrics subsystem is provider-abstracted and rights-driven. The shipped `DemoLyricsProvider` contains only app-owned development text. A production provider must explicitly describe display, synchronization, caching, territory, attribution, and commercial-use rights.
-
-Synchronized lyric display remains disabled unless both the lyrics provider and platform policy permit it. The current Spotify integration does not enable synchronized lyrics.
+The Green and White Spotify full-logo PNGs are provisioned from Spotify's official Press Center URLs by `scripts/fetch-spotify-brand.mjs` before development and production builds. The downloader validates PNG content before writing the files to `public/spotify`; Song App never recreates, recolors, crops, or otherwise edits these trademark assets.
 
 ## AI and training
 
-Spotify metadata, artwork, lyrics, and other protected provider content are not sent to external AI systems and are not collected for model training or fine-tuning. Chaos Mode uses a local, app-owned reaction catalog and deterministic event logic.
-
-## Development Mode distribution
-
-Spotify's 2026 Development Mode changes materially limit new development applications, including a small authorized-user ceiling and Premium requirements for the app owner. Treat Development Mode as a development/testing path, not proof that the product is cleared for broad commercial distribution. Re-check Spotify's current access and quota rules before launch.
+Spotify metadata, artwork, LRCLIB lyrics, and other provider content are not sent to external AI systems and are not collected for model training or fine-tuning. Chaos Mode uses app-owned deterministic copy.
 
 ## Release fail-safes
 
 A release is blocked if:
 
 - official Spotify attribution assets are missing;
-- real client secrets or tokens are present in source/build artifacts;
-- the renderer gains direct Spotify network access;
-- a visual feature becomes playback-timeline/audio synchronized;
-- licensed lyrics are bundled without rights metadata;
+- secrets/tokens are present in source/build artifacts;
+- the renderer gains direct Spotify/LRCLIB provider network access;
+- Spotify playback position or audio is used to synchronize visuals;
+- LRCLIB availability is presented as proof of commercial lyric rights;
 - artwork transformation rules are bypassed;
-- Spotify-sourced content can render without attribution/link-back.
+- Spotify-sourced content renders without required attribution/link-back.

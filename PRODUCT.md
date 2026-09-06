@@ -23,8 +23,8 @@ A Windows Spotify listener who wants their desktop to feel expressive while musi
 - Minimal mode must be calm enough to leave running all day.
 - Chaos mode is funny without insulting or profiling the listener.
 - Every visible control performs a real action.
-- No continuous animation when there is nothing useful to animate.
-- No copyrighted lyrics bundled with the app.
+- Continuous background work is visibility/power aware, quality-adaptive, and throttled when paused/hidden.
+- No copyrighted lyrics bundled with the app; live lyrics are fetched on demand from LRCLIB when the user enables the lyrics layer.
 - No Spotify audio playback, scraping, downloading, or audio-driven visualization.
 - Protected content fails closed when rights or attribution requirements are unknown.
 
@@ -54,5 +54,5 @@ A Windows Spotify listener who wants their desktop to feel expressive while musi
 - A Spotify browsing/catalog client.
 - A listening-history database.
 - An AI service that receives Spotify metadata, artwork, or lyrics.
-- Shipping licensed lyrics before a provider contract explicitly grants the required rights.
+- Treating LRCLIB API availability as proof of commercial lyric licensing or rights clearance.
 - A theme marketplace or full drag-resize layout editor.

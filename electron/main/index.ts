@@ -9,12 +9,16 @@ import { PlaybackPoller } from './spotify/playback-poller';
 import { registerIpc } from './ipc/handlers';
 import { createTray } from './system/tray';
 import { createPlaybackMemory, detectPlaybackEvents } from '../../src/features/playback-events';
+import { LyricsManager } from './lyrics/lyrics-manager';
+import { LrclibProvider } from './lyrics/lrclib-provider';
+import { SimulatorLyricsProvider } from './lyrics/simulator-provider';
 import type {
   AppSettings,
   CurrentTrack,
   PlaybackEvent,
   PlaybackSnapshot,
-  SpotifyConnectionState
+  SpotifyConnectionState,
+  LyricsState
 } from '../../src/types/core';
 
 const clientId = import.meta.env.MAIN_VITE_SPOTIFY_CLIENT_ID ?? '';
@@ -28,6 +32,7 @@ let currentTrack: CurrentTrack | null = null;
 let lastPlaybackEvent: PlaybackEvent | null = null;
 let activeShortcut = '';
 let requestedShortcut = '';
+let lyricsManager: LyricsManager | null = null;
 
 const playbackMemory = createPlaybackMemory();
 const preferences = new PreferencesStore();
@@ -50,6 +55,10 @@ function publishSpotifyState(state: SpotifyConnectionState): void {
   publishToAll('spotify:changed', state);
 }
 
+function publishLyricsState(state: LyricsState): void {
+  publishToAll('lyrics:changed', state);
+}
+
 function publishPlayback(track: CurrentTrack | null, forcedEvent?: PlaybackEvent | null): void {
   const detected = detectPlaybackEvents(playbackMemory, track);
   currentTrack = track;
@@ -61,6 +70,7 @@ function publishPlayback(track: CurrentTrack | null, forcedEvent?: PlaybackEvent
     lastPlaybackEvent = event;
     publishToAll('playback:event', event);
   }
+  void lyricsManager?.setTrack(track);
 }
 
 function getPlaybackSnapshot(): PlaybackSnapshot {
@@ -112,15 +122,26 @@ async function boot(): Promise<void> {
   const onSettingsChanged = (next: AppSettings) => {
     overlayVisible = next.overlaysVisible;
     if (next.editShortcut !== requestedShortcut) installShortcut(next.editShortcut);
+    void lyricsManager?.setEnabled(next.lyricsEnabled);
   };
 
   installShortcut(settings.editShortcut);
+  lyricsManager = new LyricsManager(
+    {
+      lrclib: new LrclibProvider({ userAgent: `${app.getName()}/${app.getVersion()}` }),
+      simulator: new SimulatorLyricsProvider()
+    },
+    publishLyricsState
+  );
+  await lyricsManager.setEnabled(settings.lyricsEnabled);
   registerIpc({
     preferences,
     spotifyAuth,
     overlays,
     getMainWindow: () => mainWindow,
     getPlaybackSnapshot,
+    getLyricsState: () => lyricsManager?.getState() ?? { status: 'idle', provider: null, trackKey: null, result: null },
+    refreshLyrics: () => lyricsManager?.refresh() ?? Promise.resolve({ status: 'idle', provider: null, trackKey: null, result: null }),
     publishPlayback,
     publishSettings,
     publishSpotifyState,

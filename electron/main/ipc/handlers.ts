@@ -10,6 +10,7 @@ import type {
   CurrentTrack,
   PlaybackEvent,
   PlaybackSnapshot,
+  LyricsState,
   SimulatorScenario,
   SpotifyConnectionState
 } from '../../../src/types/core';
@@ -27,6 +28,8 @@ export type IpcDeps = {
   overlays: OverlayManager;
   getMainWindow: () => BrowserWindow | null;
   getPlaybackSnapshot: () => PlaybackSnapshot;
+  getLyricsState: () => LyricsState;
+  refreshLyrics: () => Promise<LyricsState>;
   publishPlayback: (track: CurrentTrack | null, event?: PlaybackEvent | null) => void;
   publishSettings: (settings: AppSettings) => void;
   publishSpotifyState: (state: SpotifyConnectionState) => void;
@@ -100,6 +103,16 @@ export function registerIpc(deps: IpcDeps): void {
   ipcMain.handle('playback:snapshot', (event) => {
     assertSender(event);
     return deps.getPlaybackSnapshot();
+  });
+
+  ipcMain.handle('lyrics:state', (event) => {
+    assertSender(event);
+    return deps.getLyricsState();
+  });
+
+  ipcMain.handle('lyrics:refresh', async (event) => {
+    assertSender(event);
+    return deps.refreshLyrics();
   });
 
   ipcMain.handle('overlay:edit', (event, enabled: boolean) => {

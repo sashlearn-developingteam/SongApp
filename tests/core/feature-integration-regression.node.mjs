@@ -17,13 +17,16 @@ test('playback bridge exposes an initial snapshot and semantic playback events',
   assert.match(main, /detectPlaybackEvents/);
 });
 
-test('lyrics setting has a real overlay renderer with rights gating', () => {
+test('lyrics setting has LRCLIB main-process plumbing and a rights-gated overlay renderer', () => {
   assert.match(overlay, /LyricsLayer/);
   assert.match(overlay, /canRenderLyrics/);
+  assert.match(preload, /lyrics:refresh/);
+  assert.match(main, /LrclibProvider/);
+  assert.match(main, /setEnabled\(next\.lyricsEnabled\)/);
 });
 
-test('performance settings drive a real ambient renderer', () => {
-  assert.match(overlay, /AmbientCanvas/);
+test('performance settings drive the reactive background renderer', () => {
+  assert.match(overlay, /ReactiveBackgroundCanvas/);
   assert.match(overlay, /fpsTarget/);
   assert.match(overlay, /animationIntensity/);
 });

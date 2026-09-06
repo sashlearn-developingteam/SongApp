@@ -5,6 +5,7 @@ import type {
   DisplayInfo,
   PlaybackEvent,
   PlaybackSnapshot,
+  LyricsState,
   SimulatorResult,
   SimulatorScenario,
   SpotifyConnectionState
@@ -33,6 +34,11 @@ const api = {
     getSnapshot: (): Promise<PlaybackSnapshot> => ipcRenderer.invoke('playback:snapshot'),
     onChanged: (callback: (track: CurrentTrack | null) => void) => subscribe('playback:changed', callback),
     onEvent: (callback: (event: PlaybackEvent) => void) => subscribe('playback:event', callback)
+  },
+  lyrics: {
+    getState: (): Promise<LyricsState> => ipcRenderer.invoke('lyrics:state'),
+    refresh: (): Promise<LyricsState> => ipcRenderer.invoke('lyrics:refresh'),
+    onChanged: (callback: (state: LyricsState) => void) => subscribe('lyrics:changed', callback)
   },
   overlay: {
     setEditMode: (enabled: boolean): Promise<void> => ipcRenderer.invoke('overlay:edit', enabled),
