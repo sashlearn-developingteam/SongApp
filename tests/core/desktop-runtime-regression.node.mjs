@@ -23,3 +23,9 @@ test('desktop overlay clears root and body backgrounds before React overlay mark
   assert.match(overlayStyles, /background:\s*transparent\s*!important/);
   assert.doesNotMatch(overlayStyles, /:has\(/);
 });
+
+test('desktop runtime forwards renderer lifecycle diagnostics to PowerShell', () => {
+  assert.match(factory, /did-finish-load/);
+  assert.match(factory, /render-process-gone/);
+  assert.match(factory, /Overlay .*visible=/);
+});
