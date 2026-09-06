@@ -1,10 +1,13 @@
 import { BrowserWindow, screen } from 'electron';
-import type { AppSettings, CurrentTrack } from '../../../src/types/core';
+import type { AppSettings, CurrentTrack, LyricsState } from '../../../src/types/core';
 import { createOverlayWindow } from './window-factory';
+
+const IDLE_LYRICS: LyricsState = { status: 'idle', provider: null, trackKey: null, result: null };
 
 export class OverlayManager {
   private windows = new Map<string, BrowserWindow>();
   private lastTrack: CurrentTrack | null = null;
+  private lastLyrics: LyricsState = IDLE_LYRICS;
   private settings: AppSettings | null = null;
 
   async sync(settings: AppSettings): Promise<void> {
@@ -29,6 +32,7 @@ export class OverlayManager {
       }
       window.webContents.send('settings:changed', settings);
       window.webContents.send('playback:changed', this.lastTrack);
+      window.webContents.send('lyrics:changed', this.lastLyrics);
     }
     for (const [id, window] of this.windows) {
       if (!activeIds.has(id)) { window.destroy(); this.windows.delete(id); }
@@ -38,6 +42,11 @@ export class OverlayManager {
   broadcastTrack(track: CurrentTrack | null): void {
     this.lastTrack = track;
     for (const window of this.windows.values()) if (!window.isDestroyed()) window.webContents.send('playback:changed', track);
+  }
+
+  broadcastLyrics(state: LyricsState): void {
+    this.lastLyrics = state;
+    for (const window of this.windows.values()) if (!window.isDestroyed()) window.webContents.send('lyrics:changed', state);
   }
 
   setEditMode(enabled: boolean): void {
