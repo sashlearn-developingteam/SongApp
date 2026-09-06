@@ -16,6 +16,7 @@ import type {
 } from '../../../src/types/core';
 import { isAllowedExternalUrl } from '../security/navigation-policy';
 import { buildSimulatorScenario } from '../simulator/scenarios';
+import { ensureLyricsVisibility } from '../../../src/features/lyrics/visibility';
 
 function assertSender(event: Electron.IpcMainInvokeEvent): void {
   const window = BrowserWindow.fromWebContents(event.sender);
@@ -48,8 +49,9 @@ export function registerIpc(deps: IpcDeps): void {
   ipcMain.handle('settings:update', async (event, patch) => {
     assertSender(event);
     const parsed = settingsPatchSchema.parse(patch);
-    const settings = await deps.preferences.update(parsed);
-    if (parsed.startWithWindows !== undefined) setStartupEnabled(parsed.startWithWindows);
+    const effectivePatch = ensureLyricsVisibility(deps.preferences.get(), getDisplays(), parsed);
+    const settings = await deps.preferences.update(effectivePatch);
+    if (effectivePatch.startWithWindows !== undefined) setStartupEnabled(effectivePatch.startWithWindows);
     await deps.overlays.sync(settings);
     deps.onSettingsChanged(settings);
     deps.publishSettings(settings);
