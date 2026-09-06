@@ -11,12 +11,18 @@ function assertPreloadAvailable(): void {
   }
 }
 
-function attachDiagnostics(window: BrowserWindow): void {
+function attachDiagnostics(window: BrowserWindow, label: string): void {
   window.webContents.on('preload-error', (_event, preloadPath, error) => {
-    console.error(`[Song App] Preload failed: ${preloadPath}`, error);
+    console.error(`[Song App] Preload failed (${label}): ${preloadPath}`, error);
   });
   window.webContents.on('did-fail-load', (_event, code, description, validatedUrl) => {
-    console.error(`[Song App] Renderer load failed (${code}): ${description} ${validatedUrl}`);
+    console.error(`[Song App] Renderer load failed (${label}, ${code}): ${description} ${validatedUrl}`);
+  });
+  window.webContents.on('did-finish-load', () => {
+    console.info(`[Song App] Renderer finished loading: ${label}`);
+  });
+  window.webContents.on('render-process-gone', (_event, details) => {
+    console.error(`[Song App] Renderer process exited (${label}): ${details.reason} / ${details.exitCode}`);
   });
 }
 
@@ -52,7 +58,7 @@ export async function createMainWindow(): Promise<BrowserWindow> {
     autoHideMenuBar: true,
     webPreferences: secureWebPreferences(preload)
   });
-  attachDiagnostics(window);
+  attachDiagnostics(window, 'main');
   attachNavigationPolicy(window);
   window.once('ready-to-show', () => { if (!window.isVisible()) window.show(); });
   await load(window, 'main');
@@ -77,10 +83,11 @@ export async function createOverlayWindow(displayId: string, bounds: Electron.Re
     webPreferences: secureWebPreferences(preload)
   });
   window.setIgnoreMouseEvents(true, { forward: true });
-  attachDiagnostics(window);
+  attachDiagnostics(window, `overlay:${displayId}`);
   attachNavigationPolicy(window);
   window.once('ready-to-show', () => { if (!window.isVisible()) window.showInactive(); });
   await load(window, 'overlay', displayId);
   if (!window.isVisible()) window.showInactive();
+  console.info(`[Song App] Overlay ${displayId} visible=${window.isVisible()} bounds=${bounds.width}x${bounds.height} alwaysOnTop=${alwaysOnTop}`);
   return window;
 }
