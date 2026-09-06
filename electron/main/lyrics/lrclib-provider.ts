@@ -79,7 +79,9 @@ function metadataMatches(query: LyricsTrackQuery, candidate: LrclibCandidate): b
 
 function toResult(candidate: LrclibCandidate): LyricsResult | null {
   if (candidate.syncedLyrics) {
-    const lines = parseLrc(candidate.syncedLyrics);
+    const parsedLines = parseLrc(candidate.syncedLyrics);
+    const firstDisplayableIndex = parsedLines.findIndex((line) => line.text.trim().length > 0);
+    const lines = firstDisplayableIndex >= 0 ? parsedLines.slice(firstDisplayableIndex) : [];
     if (lines.length) {
       return {
         kind: 'synced',
